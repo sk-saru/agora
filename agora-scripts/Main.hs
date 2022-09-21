@@ -1,11 +1,13 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 -- | Module     : Main
 --     Maintainer : emi@haskell.fyi
 --     Description: Export scripts given configuration.
 --
 --     Export scripts given configuration.
-module Main (main) where
+module Main (main, GovernorDatumRequest (..)) where
 
 import Agora.Bootstrap qualified as Bootstrap
 import Agora.Governor (Governor (Governor), GovernorDatum (GovernorDatum))
@@ -17,13 +19,14 @@ import Agora.Utils (CompiledMintingPolicy (getCompiledMintingPolicy), CompiledVa
 import Cardano.Binary (Encoding)
 import Codec.CBOR.Write qualified as CBOR.Write
 import Codec.Serialise.Class (encode)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Builder.Extra qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
 import Data.Default (def)
 import Data.Function ((&))
-import Data.Tagged (Tagged)
+import Data.Tagged (Tagged (Tagged))
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
 import Development.GitRev (gitBranch, gitHash)
@@ -35,6 +38,7 @@ import PlutusLedgerApi.V1
     Validator (getValidator),
   )
 import PlutusLedgerApi.V1.Value (AssetClass)
+import PlutusLedgerApi.V2 (POSIXTime (POSIXTime), ToData)
 import PlutusLedgerApi.V2 qualified as P
 import ScriptExport.API (runServer)
 import ScriptExport.Options (parseOptions)
@@ -84,17 +88,38 @@ builders =
     -- Provided governor datum
     & insertBuilder
       "governorDatum"
-      ( \() ->
-          decodeUtf8 $
-            Base16.encode $
-              BSL.toStrict . serializeEncoding . encode . P.builtinDataToData . P.toBuiltinData $
-                GovernorDatum
-                  (ProposalThresholds (-1) (-1) (-1))
-                  (ProposalId 0)
-                  (ProposalTimingConfig (-1) (-1) (-1) (-1))
-                  (MaxTimeRangeWidth 0)
-                  3
-      )
+      (dataToCBORText . toGovernorDatum)
+
+toGovernorDatum :: GovernorDatumRequest -> GovernorDatum
+toGovernorDatum
+  (GovernorDatumRequest [e, c, v] pId [dr, vo, lo, rx] tr pps) =
+    GovernorDatum
+      (ProposalThresholds (Tagged e) (Tagged c) (Tagged v))
+      (ProposalId pId)
+      (ProposalTimingConfig (POSIXTime dr) (POSIXTime vo) (POSIXTime lo) (POSIXTime rx))
+      (MaxTimeRangeWidth (POSIXTime tr))
+      pps
+toGovernorDatum _ = error "Wrong governor datum request input"
+
+data GovernorDatumRequest = GovernorDatumRequest
+  { gdrProposalThresholds :: [Integer],
+    gdrProposalId :: Integer,
+    gdrProposalTimingConfig :: [Integer],
+    gdrMaxTimeRangeWith :: Integer,
+    gdrmaximumProposalsPerStake :: Integer
+  }
+  deriving stock (Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+dataToCBORText :: forall a. ToData a => a -> Text
+dataToCBORText =
+  decodeUtf8
+    . Base16.encode
+    . BSL.toStrict
+    . serializeEncoding
+    . encode
+    . P.builtinDataToData
+    . P.toBuiltinData
 
 serializeEncoding :: Encoding -> BSL.ByteString
 serializeEncoding =
