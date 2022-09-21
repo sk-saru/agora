@@ -6,6 +6,22 @@ This format is based on [Keep A Changelog](https://keepachangelog.com/en/1.0.0).
 
 ### Modified
 
+- Workaround `currentProposalTime` always returns `PNothing`, due to the fact
+ that upper bound of `txInfoValidRange` is never closed.
+
+  Fixed by [#177](https://github.com/Liqwid-Labs/agora/pull/177)
+
+- Fixed governor validator always fail because of the 0 ADA entry in
+ `txInfoF.mint`. (#174)
+
+  Fixed by [#175](https://github.com/Liqwid-Labs/agora/pull/175)
+
+- Standalone stake redeemers. This allows injecting custom validation logic to
+the stake validator easily. The behaviour of the default stake validator remains
+ unchanged.
+
+  Included by [#172](https://github.com/Liqwid-Labs/agora/pull/172)
+
 - Witness stakes with reference input. Stake redeemer `WitnessStake` is removed. 
 
   Included by [#168](https://github.com/Liqwid-Labs/agora/pull/168)
